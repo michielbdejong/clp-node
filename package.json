@@ -1,0 +1,22 @@
+{
+  "name": "clp-node",
+  "version": "1.0.0",
+  "description": "Tiny wrapper around Interledger's Ledger Plugin Interface, that exposes CLP",
+  "main": "index.js",
+  "dependencies": {
+    "greenlock": "^2.1.16",
+    "ws": "^3.1.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/michielbdejong/clp-node.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/michielbdejong/clp-node/issues"
+  },
+  "homepage": "https://github.com/michielbdejong/clp-node#readme",
+  "devDependencies": {
+  }
+}
