@@ -7,6 +7,7 @@ function ClpNode (config, handler) {
   this.upstreams = []
   this.serversToClose = []
   this.config = config
+  this.handler = handler
 }
 
 ClpNode.prototype = {
@@ -29,20 +30,15 @@ ClpNode.prototype = {
         this.wss = new WebSocket.Server({ server: servers[0] })
         this.serversToClose.push(this.wss)
         this.wss.on('connection', (ws, httpReq) => {
-          const parts = httpReq.url.split('/')
-          // console.log('client connected!', parts)
-          //        0: software, 1: clp, 2: spec, 3: name, 4: token
-          // e.g. [ 'ilp-node-3', 'clp', 'v1', 'a7f0e298941b772f5abc028d477938b6bbf56e1a14e3e4fae97015401e8ab372', 'ea16ed65d80fa8c760e9251b235e3d47893e7c35ffe3d9c57bd041200d1c0a50' ]
-          const peerId = parts[3]
-          // const peerToken = parts[4] // TODO: use this to authorize reconnections
-          // console.log('assigned peerId!', peerId)
-          this.addClpPeer('downstream', peerId, ws)
+          console.log('a client has connected')
+          this.handler(ws)
         })
       }
     })
   },
 
   connectToUpstreams () {
+    console.log('connectToUpstreams', this.config.upstreams)
     if (!Array.isArray(this.config.upstreams)) {
       return Promise.resolve()
     }
@@ -55,19 +51,19 @@ ClpNode.prototype = {
           perMessageDeflate: false
         })
         ws.on('open', () => {
-          // console.log('creating client peer')
-          this.upstreams.push(ws)
-          this.addClpPeer('upstream', peerName, ws).then(resolve, reject)
+          console.log('connected to a server')
+          this.handler(ws)
+          resolve()
         })
       })
     }))
   },
 
   start () {
+    console.log('starting ClpNode', this.config)
     return Promise.all([
       this.maybeListen(), // .then(() => { console.log('maybeListen done', this.config) }),
-      this.connectToUpstreams(), // .then(() => { console.log('connectToUpstreams done', this.config) }),
-      this.connectPlugins() // .then(() => { console.log('connectPlugins done', this.config) })
+      this.connectToUpstreams() // .then(() => { console.log('connectToUpstreams done', this.config) }),
     ])
   },
 
@@ -88,9 +84,7 @@ ClpNode.prototype = {
         server.close(resolve)
       })
     }))
-
-    // disconnect plugins:
-    promises.push(this.plugins.map(plugin => plugin.disconnect()))
+    console.log('closing clp-node')
     return Promise.all(promises)
   },
 
