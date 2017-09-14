@@ -3,8 +3,10 @@ const ClpNode = require('.')
 const server = new ClpNode({
     name: 'server',
     listen: 8000 
-}, (msg, whoAmI, url, incarnation) => {
-  console.log('msg reached', whoAmI, incarnation, msg)
+}, (whoAmI, baseUrl, urlPath) => {
+  console.log('connected', whoAmI, baseUrl, urlPath)
+}, (msg, whoAmI, baseUrl, urlPath) => {
+  console.log('msg reached', whoAmI, baseUrl, urlPath, msg)
 })
 
 const client = new ClpNode({
@@ -12,8 +14,10 @@ const client = new ClpNode({
     upstreams: [
        { url: 'ws://localhost:8000', token: 'asdf' }
     ]
-}, (msg, whoAmI, url, incarnation) => {
-  console.log('msg reached', whoAmI, incarnation, msg)
+}, (whoAmI, baseUrl, urlPath) => {
+  console.log('connected', whoAmI, baseUrl, urlPath)
+}, (msg, whoAmI, baseUrl, urlPath) => {
+  console.log('msg reached', whoAmI, baseUrl, urlPath, msg)
 })
 
 

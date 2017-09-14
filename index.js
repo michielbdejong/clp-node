@@ -3,11 +3,12 @@ const http = require('http')
 
 const letsEncrypt = require('./letsencrypt')
 
-function ClpNode (config, handler) {
+function ClpNode (config, connectHandler, msgHandler) {
   this.upstream = {}
   this.serversToClose = []
   this.config = config
-  this.handler = handler
+  this.connectHandler = connectHandler
+  this.msgHandler = msgHandler
   this.incarnations = {}
   // this.myBaseUrl
 }
@@ -28,7 +29,7 @@ ClpNode.prototype = {
         server.listen(this.config.listen, resolve([ server ]))
       }
     }).then(servers => {
-      // console.log('servers:', servers.length)
+      console.log('servers:', servers.length)
       this.serversToClose = servers
       if (servers.length) {
         this.wss = new WebSocket.Server({ server: servers[0] })
@@ -36,18 +37,19 @@ ClpNode.prototype = {
         this.wss.on('connection', (ws, httpReq) => {
           console.log('a client has connected', this.config.name)
           ws.on('message', (msg) => {
-            this.handler(msg, 'server', this.myBaseUrl + httpReq.url)
+            this.msgHandler(msg, 'server', this.myBaseUrl, httpReq.url)
           })
+          this.connectHandler('server', this.myBaseUrl, httpReq.url)
         })
       }
     })
   },
 
-  connectToUpstream(baseUrl, fullUrl) {
+  connectToUpstream(baseUrl, urlPath) {
     return new Promise((resolve, reject) => {
       // console.log('connecting to upstream WebSocket', upstreamConfig.url + '/' + this.config.name + '/' + upstreamConfig.token, this.config, upstreamConfig)
       console.log('creating WebSocket object')
-      const ws = new WebSocket(fullUrl, {
+      const ws = new WebSocket(baseUrl + urlPath, {
         perMessageDeflate: false
       })
       ws.hasBeenOpen = false
@@ -66,8 +68,8 @@ ClpNode.prototype = {
         console.log('close!', this.config.name, ws.incarnation)
         if (ws.hasBeenOpen && !ws.shouldClose) {
           console.log('has been open and should not close')
-          this.ensureUpstream(baseUrl, fullUrl).then(() => {
-            console.log('ensured after disconnect!', baseUrl, fullUrl)
+          this.ensureUpstream(baseUrl, urlPath).then(() => {
+            console.log('ensured after disconnect!', baseUrl, urlPath)
           }, (err) => {
             console.log('wait, what, too?', err, err.message)
           })
@@ -77,13 +79,13 @@ ClpNode.prototype = {
     })
   },
 
-  connectToUpstreamRetry(baseUrl, fullUrl) {
-    console.log('starting retry interval', baseUrl, fullUrl)
+  connectToUpstreamRetry(baseUrl, urlPath) {
+    console.log('starting retry interval', baseUrl, urlPath)
     return new Promise((resolve) => {
       let done = false
       let timer = setInterval(() => {
         console.log('calling connect')
-        this.connectToUpstream(baseUrl, fullUrl).then(ws => {
+        this.connectToUpstream(baseUrl, urlPath).then(ws => {
           if (done) { // this can happen if opening the WebSocket works, but just takes long
             ws.shouldClose = true
             ws.close()
@@ -99,13 +101,15 @@ ClpNode.prototype = {
     })
   },
 
-  ensureUpstream(baseUrl, fullUrl) {
-    console.log('ensuring upstream', baseUrl, fullUrl)
-    return this.connectToUpstreamRetry(baseUrl, fullUrl).then(ws => {
+  ensureUpstream(baseUrl, urlPath) {
+    console.log('ensuring upstream', baseUrl, urlPath)
+    return this.connectToUpstreamRetry(baseUrl, urlPath).then(ws => {
       console.log('connected to a server', this.config.name)
       ws.on('message', (msg) => {
-        this.handler(msg, 'client', baseUrl, ws.incarnation)
+        this.msgHandler(msg, 'client', baseUrl, urlPath)
       })
+      this.connectHandler('server', this.myBaseUrl, urlPath)
+      console.log(`upstream ${baseUrl} reached incarnation ${ws.incarnation}`)
       this.upstream[baseUrl] = ws
     }, (err) => {
       console.log('wait, what?', err, err.message)
@@ -118,9 +122,9 @@ ClpNode.prototype = {
       return Promise.resolve()
     }
     return Promise.all(this.config.upstreams.map(upstreamConfig => {
-      const url = upstreamConfig.url + '/' + this.config.name + '/' + upstreamConfig.token
+      const urlPath = '/' + this.config.name + '/' + upstreamConfig.token
       this.incarnations[upstreamConfig.url] = 0
-      return this.ensureUpstream(upstreamConfig.url, url)
+      return this.ensureUpstream(upstreamConfig.url, urlPath)
     }))
   },
 
