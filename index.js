@@ -12,7 +12,7 @@ function ClpNode (config, handler) {
 
 ClpNode.prototype = {
   maybeListen () {
-    const myBaseUrl
+    let myBaseUrl
     return new Promise((resolve, reject) => {
       if (this.config.tls) { // case 1: use LetsEncrypt => [https, http]
         myBaseUrl = 'wss://' + this.config.tls
