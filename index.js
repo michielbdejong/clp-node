@@ -37,12 +37,14 @@ ClpNode.prototype = {
         this.serversToClose.push(this.wss)
         this.wss.on('connection', (ws, httpReq) => {
           console.log('a client has connected', this.config.name)
+          console.log('setting downstream!', this.myBaseUrl, httpReq.url)
+          this.downstream[this.myBaseUrl + httpReq.url] = ws
+          console.log('setting msg handler')
           ws.on('message', (msg) => {
             this.msgHandler(msg, 'server', this.myBaseUrl, httpReq.url)
           })
+          console.log('calling connect handler')
           this.connectHandler('server', this.myBaseUrl, httpReq.url)
-          console.log('setting downstream!', this.myBaseUrl, httpReq.url)
-          this.downstream[this.myBaseUrl + httpReq.url] = ws
         })
       }
     })
@@ -111,9 +113,10 @@ ClpNode.prototype = {
       ws.on('message', (msg) => {
         this.msgHandler(msg, 'client', baseUrl, urlPath)
       })
-      this.connectHandler('server', baseUrl, urlPath)
       console.log(`upstream ${baseUrl} reached incarnation ${ws.incarnation}`)
       this.upstream[baseUrl + urlPath] = ws
+      console.log('calling connect handler')
+      this.connectHandler('server', baseUrl, urlPath)
     }, (err) => {
       console.log('wait, what?', err, err.message)
     })
