@@ -4,23 +4,24 @@ const http = require('http')
 const letsEncrypt = require('./letsencrypt')
 
 function ClpNode (config, handler) {
-  this.upstreams = []
+  this.upstream = {}
   this.serversToClose = []
   this.config = config
   this.handler = handler
+  this.incarnations = {}
+  // this.myBaseUrl
 }
 
 ClpNode.prototype = {
   maybeListen () {
-    let myBaseUrl
     return new Promise((resolve, reject) => {
       if (this.config.tls) { // case 1: use LetsEncrypt => [https, http]
-        myBaseUrl = 'wss://' + this.config.tls
+        this.myBaseUrl = 'wss://' + this.config.tls
         letsEncrypt(this.config.tls).then(resolve, reject)
       } else if (typeof this.config.listen !== 'number') { // case 2: don't open run a server => []
         resolve([])
       } else { // case 3: listen without TLS on a port => [http]
-        myBaseUrl = 'ws://localhost:' + this.config.listen
+        this.myBaseUrl = 'ws://localhost:' + this.config.listen
         const server = http.createServer((req, res) => {
           res.end('This is a CLP server, please upgrade to WebSockets.')
         })
@@ -33,10 +34,81 @@ ClpNode.prototype = {
         this.wss = new WebSocket.Server({ server: servers[0] })
         this.serversToClose.push(this.wss)
         this.wss.on('connection', (ws, httpReq) => {
-          console.log('a client has connected')
-          this.handler(ws, 'server', myBaseUrl + httpReq.url)
+          console.log('a client has connected', this.config.name)
+          ws.on('message', (msg) => {
+            this.handler(msg, 'server', this.myBaseUrl + httpReq.url)
+          })
         })
       }
+    })
+  },
+
+  connectToUpstream(baseUrl, fullUrl) {
+    return new Promise((resolve, reject) => {
+      // console.log('connecting to upstream WebSocket', upstreamConfig.url + '/' + this.config.name + '/' + upstreamConfig.token, this.config, upstreamConfig)
+      console.log('creating WebSocket object')
+      const ws = new WebSocket(fullUrl, {
+        perMessageDeflate: false
+      })
+      ws.hasBeenOpen = false
+      ws.shouldClose = false
+      ws.incarnation = ++this.incarnations[baseUrl]
+      console.log('created WebSocket object')
+      ws.on('open', () => {
+        ws.hasBeenOpen = true
+        resolve(ws)
+      })
+      ws.on('error', (err) => {
+        console.log('error!', err, this.config.name, ws.incarnation)
+        reject()
+      })
+      ws.on('close', () => {
+        console.log('close!', this.config.name, ws.incarnation)
+        if (ws.hasBeenOpen && !ws.shouldClose) {
+          console.log('has been open and should not close')
+          this.ensureUpstream(baseUrl, fullUrl).then(() => {
+            console.log('ensured after disconnect!', baseUrl, fullUrl)
+          }, (err) => {
+            console.log('wait, what, too?', err, err.message)
+          })
+        }
+      })
+      console.log('ws.on handlers set')
+    })
+  },
+
+  connectToUpstreamRetry(baseUrl, fullUrl) {
+    console.log('starting retry interval', baseUrl, fullUrl)
+    return new Promise((resolve) => {
+      let done = false
+      let timer = setInterval(() => {
+        console.log('calling connect')
+        this.connectToUpstream(baseUrl, fullUrl).then(ws => {
+          if (done) { // this can happen if opening the WebSocket works, but just takes long
+            ws.shouldClose = true
+            ws.close()
+          } else {
+            done = true
+            clearInterval(timer)
+            resolve(ws)
+          }
+        }).catch((err) => {
+          console.log('hm, that did not work')
+        })
+      }, 1000)
+    })
+  },
+
+  ensureUpstream(baseUrl, fullUrl) {
+    console.log('ensuring upstream', baseUrl, fullUrl)
+    return this.connectToUpstreamRetry(baseUrl, fullUrl).then(ws => {
+      console.log('connected to a server', this.config.name)
+      ws.on('message', (msg) => {
+        this.handler(msg, 'client', baseUrl, ws.incarnation)
+      })
+      this.upstream[baseUrl] = ws
+    }, (err) => {
+      console.log('wait, what?', err, err.message)
     })
   },
 
@@ -46,20 +118,9 @@ ClpNode.prototype = {
       return Promise.resolve()
     }
     return Promise.all(this.config.upstreams.map(upstreamConfig => {
-      const peerName = upstreamConfig.url.replace(/(?!\w)./g, '')
-      // console.log({ url: upstreamConfig.url, peerName })
-      return new Promise((resolve, reject) => {
-        // console.log('connecting to upstream WebSocket', upstreamConfig.url + '/' + this.config.name + '/' + upstreamConfig.token, this.config, upstreamConfig)
-        const url = upstreamConfig.url + '/' + this.config.name + '/' + upstreamConfig.token
-        const ws = new WebSocket(url, {
-          perMessageDeflate: false
-        })
-        ws.on('open', () => {
-          console.log('connected to a server')
-          this.handler(ws, 'client', url)
-          resolve()
-        })
-      })
+      const url = upstreamConfig.url + '/' + this.config.name + '/' + upstreamConfig.token
+      this.incarnations[upstreamConfig.url] = 0
+      return this.ensureUpstream(upstreamConfig.url, url)
     }))
   },
 
@@ -73,12 +134,13 @@ ClpNode.prototype = {
 
   stop () {
     // close ws/wss clients:
-    let promises = this.upstreams.map(ws => {
+    let promises = Object.keys(this.upstream).map(url => {
       return new Promise(resolve => {
-        ws.on('close', () => {
+        this.upstream[url].shouldClose = true
+        this.upstream[url].on('close', () => {
           resolve()
         })
-        ws.close()
+        this.upstream[url].close()
       })
     })
 
@@ -92,13 +154,15 @@ ClpNode.prototype = {
     return Promise.all(promises)
   },
 
-  send (obj) {
-    return this.peers['default'].send(obj)
-  },
-
-  on (eventName, eventHandler) {
-    return this.peers['default'].send(obj)
-  },
+  send (url, msg) {
+    if (url === this.myBaseUrl) {
+       this.wss.send(msg)
+     } else if (this.upstream[url]) {
+       this.upstream[url].send(msg)
+     } else {
+       console.log('no such peer!', url, Object.keys(this.upstream))
+     }
+  }
 }
 
 module.exports = ClpNode

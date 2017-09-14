@@ -1,6 +1,6 @@
 {
   "name": "clp-node",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Tiny wrapper around Interledger's Ledger Plugin Interface, that exposes CLP",
   "main": "index.js",
   "dependencies": {
