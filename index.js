@@ -12,12 +12,15 @@ function ClpNode (config, handler) {
 
 ClpNode.prototype = {
   maybeListen () {
+    const myBaseUrl
     return new Promise((resolve, reject) => {
       if (this.config.tls) { // case 1: use LetsEncrypt => [https, http]
+        myBaseUrl = 'wss://' + this.config.tls
         letsEncrypt(this.config.tls).then(resolve, reject)
       } else if (typeof this.config.listen !== 'number') { // case 2: don't open run a server => []
         resolve([])
       } else { // case 3: listen without TLS on a port => [http]
+        myBaseUrl = 'ws://localhost:' + this.config.listen
         const server = http.createServer((req, res) => {
           res.end('This is a CLP server, please upgrade to WebSockets.')
         })
@@ -31,7 +34,7 @@ ClpNode.prototype = {
         this.serversToClose.push(this.wss)
         this.wss.on('connection', (ws, httpReq) => {
           console.log('a client has connected')
-          this.handler(ws)
+          this.handler(ws, 'server', myBaseUrl + httpReq.url)
         })
       }
     })
@@ -47,12 +50,13 @@ ClpNode.prototype = {
       // console.log({ url: upstreamConfig.url, peerName })
       return new Promise((resolve, reject) => {
         // console.log('connecting to upstream WebSocket', upstreamConfig.url + '/' + this.config.name + '/' + upstreamConfig.token, this.config, upstreamConfig)
-        const ws = new WebSocket(upstreamConfig.url + '/' + this.config.name + '/' + upstreamConfig.token, {
+        const url = upstreamConfig.url + '/' + this.config.name + '/' + upstreamConfig.token
+        const ws = new WebSocket(url, {
           perMessageDeflate: false
         })
         ws.on('open', () => {
           console.log('connected to a server')
-          this.handler(ws)
+          this.handler(ws, 'client', url)
           resolve()
         })
       })

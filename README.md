@@ -20,8 +20,8 @@ Then there are basically three ways to use ClpNode:
 
 ## Listen on ws://localhost:8000
 ```js
-const clpNode1 = new ClpNode({ listen: 8000 }, (ws) => {
-  console.log('a client has connected!')
+const clpNode1 = new ClpNode({ listen: 8000 }, (ws, whoAmI, url) => {
+  console.log('I am the ' + whoAmI /* 'server' */ + ' and a client has connected to ' + url)
   ws.on('message', (message) => {
     ws.send('you said:')
     ws.send(message)
@@ -40,7 +40,8 @@ ssh root@my.domain.com
 
 Then on your server, save the following nodejs script:
 ```js
-const clpNode2 = new ClpNode({ tls: 'my.domain.com' }, (ws) => {
+const clpNode2 = new ClpNode({ tls: 'my.domain.com' }, (ws, whoAmI, url) => {
+  console.log('I am the ' + whoAmI /* 'server' */ + ' and a client has connected to ' + url)
   console.log('a client has connected!')
   ws.on('message', (message) => {
     ws.send('you said:')
@@ -51,8 +52,8 @@ const clpNode2 = new ClpNode({ tls: 'my.domain.com' }, (ws) => {
 
 ## Connect to a server
 ```js
-const clpNode3 = new ClpNode({ upstreams: [ { url: 'wss://my.domain.com', path: '/' } ] }, (ws) => {
-  console.log('connected to a server!')
+const clpNode3 = new ClpNode({ upstreams: [ { url: 'wss://my.domain.com', path: '/' } ] }, (ws, whoAmI, url) => {
+  console.log('I am the ' + whoAmI /* 'client' */ + ' and I have connected to ' + url)
   ws.on('message', (message) => {
     ws.send('thanks')
   })
