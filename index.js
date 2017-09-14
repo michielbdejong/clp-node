@@ -4,6 +4,7 @@ const http = require('http')
 const letsEncrypt = require('./letsencrypt')
 
 function ClpNode (config, connectHandler, msgHandler) {
+  this.downstream = {}
   this.upstream = {}
   this.serversToClose = []
   this.config = config
@@ -40,6 +41,8 @@ ClpNode.prototype = {
             this.msgHandler(msg, 'server', this.myBaseUrl, httpReq.url)
           })
           this.connectHandler('server', this.myBaseUrl, httpReq.url)
+          console.log('setting downstream!', this.myBaseUrl, httpReq.url)
+          this.downstream[this.myBaseUrl + httpReq.url] = ws
         })
       }
     })
@@ -108,9 +111,9 @@ ClpNode.prototype = {
       ws.on('message', (msg) => {
         this.msgHandler(msg, 'client', baseUrl, urlPath)
       })
-      this.connectHandler('server', this.myBaseUrl, urlPath)
+      this.connectHandler('server', baseUrl, urlPath)
       console.log(`upstream ${baseUrl} reached incarnation ${ws.incarnation}`)
-      this.upstream[baseUrl] = ws
+      this.upstream[baseUrl + urlPath] = ws
     }, (err) => {
       console.log('wait, what?', err, err.message)
     })
@@ -159,12 +162,14 @@ ClpNode.prototype = {
   },
 
   send (url, msg) {
-    if (url === this.myBaseUrl) {
-       this.wss.send(msg)
+    if (this.downstream[url]) {
+       console.log(`I know ${url} as a downstream of mine!`)
+       this.downstream[url].send(msg)
      } else if (this.upstream[url]) {
+       console.log(`I know ${url} as an upstream of mine!`)
        this.upstream[url].send(msg)
      } else {
-       console.log('no such peer!', url, Object.keys(this.upstream))
+       console.log('no such peer!', url, Object.keys(this.downstream), Object.keys(this.upstream))
      }
   }
 }
