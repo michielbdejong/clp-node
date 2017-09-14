@@ -1,63 +1,38 @@
-# clp-cat
-A combination of clp-packet and ws-cat. Use it as a debug tool, to talk to clp-frog or to ilp-node
+# clp-node
 
-![cat debugging a frog](http://i.imgur.com/6IVYUHo.jpg "Cat debugging a Frog")
+A WebSocket server and client for use in
+[ilp-node](https://github.com/michielbdejong/ilp-node),
+[clp-frog](https://github.com/michielbdejong/clp-cat),
+[clp-cat](https://github.com/michielbdejong/clp-cat), and similar software.
 
-# Getting started
-Enter the `node` REPL and require a plugin, a frog, and cat:
-```sh
-$ node
->
- const Plugin = require('ilp-plugin-bells')
- const plugin = new Plugin({ account: 'https://red.ilpdemo.org/ledger/accounts/alice', password: 'alice' })
- const Frog = require('clp-frog')
- const Cat = require('.')
- const ClpPacket = require('clp-packet')
-```
-
-# Connecting the frog and the cat
-
-You have four options:
-
-## With the frog as server and the cat as client:
-
+# Usage
 ```js
->
- const frog = new Frog({ clp: { version: 1, listen:8000 }, plugin })
- const cat = new Cat({ clp: { version: 1, name: 'alice', upstreams: [ { url: 'ws://localhost:8000/frog/clp/v1', token: 'alice' } ] } })
-```
+const ClpNode = require('ClpNode')
 
-## The other way around:
+// listen on ws://localhost:8000
+const clpNode1 = new ClpNode({ listen: 8000 }, (ws) => {
+  console.log('a client has connected!')
+  ws.on('message', (message) => {
+    ws.send('you said:')
+    ws.send(message)
+  })
+})
 
-```js
->
- const frog = new Frog({ clp: { version: 1, name: 'alice', upstreams: [ { url: 'ws://localhost:8000/cat/clp/v1', token: 'alice' } ] }, plugin })
- const cat = new Cat({ clp: { version: 1, listen:8000 } ] })
-```
+// listen on wss://my.domain.com with on-the-fly LetsEncrypt registration
+const clpNode2 = new ClpNode({ tls: 'my.domain.com' }, (ws) => {
+  console.log('a client has connected!')
+  ws.on('message', (message) => {
+    ws.send('you said:')
+    ws.send(message)
+  })
+})
 
-## With the frog on a hosted server:
-
-```js
->
- const frog = new Frog({ clp: { version: 1, tls: 'frog.example.com' }, plugin })
- const cat = new Cat({ clp: { version: 1, name: 'alice', upstreams: [ { url: 'wss://frog.example.com/frog/clp/v1', token: 'alice' } ] } })
-```
-
-## With the cat on a hosted server:
-
-```js
->
- const frog = new Frog({ clp: { version: 1, name: 'alice', upstreams: [ { url: 'wss://cat.example.com/cat/clp/v1', token: 'alice' } ] }, plugin })
- const cat = new Cat({ clp: { version: 1,  tls: 'cat.example.com' } })
-```
-
-# Get Alice's balance
-ClpCat parses incoming CLP packets, and also creates eval strings for them, where literals are smartly replaced with appropriate constants from ClpPacket:
-
-```js
->
- frog.start().then(() => { console.log('started') })
- cat.on('incoming', (obj, evalString) => { console.log(evalString) })
- cat.send({ type: ClpPacket.TYPE_MESSAGE, requestId: 1, data: [ { protocolName: 'balance', contentType: ClpPacket.MIME_APPLICATION_OCTET_STREAM, data: Buffer.from([ 0 ]) } ] })
-"{ type: ClpPacket.TYPE_RESPONSE, requestId: 1, data: [ { protocolName: 'balance', contentType: ClpPacket.MIME_APPLICATION_OCTET_STREAM, data: Buffer.from([ 0, 0, 0, 0, 0, 0, 255, 255 ]) } ] }"
+// connect to a server
+const clpNode3 = new ClpNode({ upstreams: [ { url: 'wss://my.domain.com', path: '/' } ] }, (ws) => {
+  console.log('connected to a server!')
+  ws.on('message', (message) => {
+    ws.send('thanks')
+  })
+  ws.send('hello')
+})
 ```
