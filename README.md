@@ -6,10 +6,20 @@ A WebSocket server and client for use in
 [clp-cat](https://github.com/michielbdejong/clp-cat), and similar software.
 
 # Usage
+Inside your nodejs project, run:
+```sh
+npm install --save michielbdejong/clp-node
+```
+
+Then in your nodejs script:
 ```js
 const ClpNode = require('ClpNode')
+```
 
-// listen on ws://localhost:8000
+Then there are basically three ways to use ClpNode:
+
+## Listen on ws://localhost:8000
+```js
 const clpNode1 = new ClpNode({ listen: 8000 }, (ws) => {
   console.log('a client has connected!')
   ws.on('message', (message) => {
@@ -17,8 +27,19 @@ const clpNode1 = new ClpNode({ listen: 8000 }, (ws) => {
     ws.send(message)
   })
 })
+``
 
-// listen on wss://my.domain.com with on-the-fly LetsEncrypt registration
+
+## Listen on wss://my.domain.com with on-the-fly LetsEncrypt registration
+Make sure you point the DNS domain to this server first, and ssh into your
+server:
+
+```sh
+ssh root@my.domain.com
+```
+
+Then on your server, save the following nodejs script:
+```js
 const clpNode2 = new ClpNode({ tls: 'my.domain.com' }, (ws) => {
   console.log('a client has connected!')
   ws.on('message', (message) => {
@@ -26,13 +47,35 @@ const clpNode2 = new ClpNode({ tls: 'my.domain.com' }, (ws) => {
     ws.send(message)
   })
 })
+```
 
-// connect to a server
+## Connect to a server
+```js
 const clpNode3 = new ClpNode({ upstreams: [ { url: 'wss://my.domain.com', path: '/' } ] }, (ws) => {
   console.log('connected to a server!')
   ws.on('message', (message) => {
     ws.send('thanks')
   })
   ws.send('hello')
+})
+```
+
+## A combination of those
+You can also specify multiple upstreams, even if the node is already a server itself. In a future version
+we might add better support for that, so you can see which of your peers is connected when your connect-callback
+is called.
+
+# Start and stop the WebSocket
+To start the clp node means that it starts listening as a server, and/or connects to the upstreams you configured.
+To stop the clp node means all connections, upstream and downstream, are closed again.
+
+```js
+clpNode.start().then(() => {
+  console.log('clp node started', clpNode.config)
+  return new Promise((resolve) => { setTimeout(resolve, 10000) })
+}).then(() => {
+  return clpNode.stop()
+}).then(() => {
+  console.log('clp node stopped')
 })
 ```
