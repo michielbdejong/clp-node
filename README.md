@@ -1,5 +1,7 @@
 # clp-node
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/michielbdejong/clp-node.svg)](https://greenkeeper.io/)
+
 A WebSocket server and client for use in
 [ilp-node](https://github.com/michielbdejong/ilp-node),
 [clp-frog](https://github.com/michielbdejong/clp-cat),
